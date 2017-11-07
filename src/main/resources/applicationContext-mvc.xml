@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:context="http://www.springframework.org/schema/context" xmlns:mvc="http://www.springframework.org/schema/mvc"
+	xmlns:aop="http://www.springframework.org/schema/aop"
+	xsi:schemaLocation="http://www.springframework.org/schema/mvc http://www.springframework.org/schema/mvc/spring-mvc.xsd
+		http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+		http://www.springframework.org/schema/aop http://www.springframework.org/schema/aop/spring-aop.xsd
+		http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context.xsd">
+
+	<!-- 自动扫描且只扫描@Controller，加入定制化包实体路径com.sample -->
+	<context:component-scan base-package="com.czyh.czyhweb.web" use-default-filters="false">
+		<context:include-filter type="annotation" expression="org.springframework.stereotype.Controller" />
+		<context:include-filter type="annotation" expression="org.springframework.web.bind.annotation.ControllerAdvice" />
+	</context:component-scan>
+
+	<!-- 定义国际化消息配置 -->
+	<bean id="messageSource" class="org.springframework.context.support.ResourceBundleMessageSource">
+		<!-- 国际化信息所在的文件名 -->
+		<property name="basename" value="i18n/globalMessages" />
+		<!-- 如果在国际化资源文件中找不到对应代码的信息，就用这个代码作为名称 -->
+		<property name="useCodeAsDefaultMessage" value="true" />
+	</bean>
+
+	<!-- 基于Session的本地化解析器 -->
+	<!-- <bean id="localeResolver" class="org.springframework.web.servlet.i18n.SessionLocaleResolver" /> -->
+
+	<!-- 基于Cookie的本地化解析器 -->
+	<bean id="localeResolver" class="org.springframework.web.servlet.i18n.CookieLocaleResolver">
+		<property name="defaultLocale" value="zh_CN" />
+		<!-- 设置cookieName名称，可以根据名称通过js来修改设置，也可以像上面演示的那样修改设置，默认的名称为 类名+LOCALE（即：org.springframework.web.servlet.i18n.CookieLocaleResolver.LOCALE -->
+		<property name="cookieName" value="fxlLanguage" />
+		<!-- 设置cookie可见的地址，默认是“/”即对网站所有地址都是可见的，如果设为其它地址，则只有该地址或其后的地址才可见 -->
+		<property name="cookiePath" value="/" />
+		<!-- <property name="cookieDomain" value="idrilling.cn" /> -->
+		<property name="cookieMaxAge" value="2147483647" />
+		<!-- <property name="cookieHttpOnly" value="true" /> -->
+	</bean>
+
+	<!-- 系统日志跟踪功能 -->
+	<bean id="log4JDBCImpl" class="com.czyh.czyhweb.log.impl.Log4JDBCImpl">
+		<property name="rootLogLevel" value="ERROR" />
+		<property name="customLogLevel">
+			<map>
+				<entry key="com.czyh.czyhweb" value="TRACE" />
+			</map>
+		</property>
+	</bean>
+
+	<mvc:interceptors>
+		<!-- 国际化操作拦截器 如果采用基于（请求/Session/Cookie）则必需配置 -->
+		<bean class="org.springframework.web.servlet.i18n.LocaleChangeInterceptor" />
+		<!-- 日志拦截记录 -->
+		<mvc:interceptor>
+			<mvc:mapping path="/fxl/**" />
+			<mvc:mapping path="/login/timeout/success" />
+			<bean class="com.czyh.czyhweb.log.spring.LogInterceptor">
+				<property name="logAPI" ref="log4JDBCImpl" />
+			</bean>
+		</mvc:interceptor>
+	</mvc:interceptors>
+
+	<mvc:annotation-driven content-negotiation-manager="contentNegotiationManager">
+		<mvc:message-converters register-defaults="true">
+			<!-- 将StringHttpMessageConverter的默认编码设为UTF-8 -->
+			<bean class="org.springframework.http.converter.StringHttpMessageConverter">
+				<constructor-arg value="UTF-8" />
+			</bean>
+			<!-- 将Jackson2HttpMessageConverter的默认格式化输出设为true -->
+			<bean class="org.springframework.http.converter.json.MappingJackson2HttpMessageConverter">
+				<property name="prettyPrint" value="true" />
+			</bean>
+		</mvc:message-converters>
+	</mvc:annotation-driven>
+
+	<aop:config proxy-target-class="true"></aop:config>
+	<bean class="org.apache.shiro.spring.security.interceptor.AuthorizationAttributeSourceAdvisor">
+		<property name="securityManager" ref="securityManager" />
+	</bean>
+
+	<!-- REST中根据URL后缀自动判定Content-Type及相应的View -->
+	<bean id="contentNegotiationManager" class="org.springframework.web.accept.ContentNegotiationManagerFactoryBean">
+		<property name="mediaTypes">
+			<value>
+				json=application/json
+				xml=application/xml
+			</value>
+		</property>
+	</bean>
+
+	<bean id="multipartResolver" class="org.springframework.web.multipart.commons.CommonsMultipartResolver">
+		<property name="defaultEncoding">
+			<value>UTF-8</value>
+		</property>
+		<property name="maxUploadSize">
+			<value>10485760</value><!-- 上传文件大小限制为10M，10*1024*1024 -->
+		</property>
+		<property name="maxInMemorySize">
+			<value>4096</value><!-- 上传文件内存缓存4K，4*1024 -->
+		</property>
+		<property name="resolveLazily" value="true" />
+	</bean>
+
+	<!-- 容器默认的DefaultServletHandler处理 所有静态内容与无RequestMapping处理的URL -->
+	<mvc:default-servlet-handler />
+
+	<!-- 定义JSP文件的位置 -->
+	<bean class="org.springframework.web.servlet.view.InternalResourceViewResolver">
+		<property name="prefix" value="/WEB-INF/views/" />
+		<property name="suffix" value=".jsp" />
+	</bean>
+
+	<!-- 定义无Controller的path<->view直接映射 -->
+	<mvc:view-controller path="/" view-name="redirect:/fxl/index" />
+	<mvc:view-controller path="/index" view-name="redirect:/fxl/index" />
+	<mvc:view-controller path="/fxl/event/toEventCreateMain" view-name="fxl/event/eventCreateMain" />
+	<mvc:view-controller path="/web/403" view-name="/error/403" />
+	<mvc:view-controller path="/web/404" view-name="/error/404" />
+	<mvc:view-controller path="/web/500" view-name="/error/500" />
+
+	<!-- 全局异常配置 start -->
+	<bean id="exceptionResolver" class="com.czyh.czyhweb.exception.FxlMappingExceptionResolver">
+		<property name="exceptionMappings">
+			<props>
+				<prop key="org.apache.shiro.authz.UnauthorizedException">error/403</prop>
+				<prop key="java.lang.NullPointerException">error/500</prop>
+				<prop key="java.lang.Throwable">error/500</prop>				
+			</props>
+		</property>
+		<property name="statusCodes">
+			<props>
+				<prop key="500">500</prop>
+				<prop key="404">404</prop>
+				<prop key="403">403</prop>
+			</props>
+		</property>
+		<!-- 设置日志输出级别，不定义则默认不输出警告等错误日志信息 -->
+		<property name="warnLogCategory" value="com.czyh.czyhweb.exception.FxlMappingExceptionResolver" />
+		<!-- 默认错误页面，当找不到上面mappings中指定的异常对应视图时，使用本默认配置 -->
+		<property name="defaultErrorView" value="error/500" />
+		<!-- 默认HTTP状态码 ，返回错误默认设置的状态码 -->
+		<property name="defaultStatusCode" value="200" />
+	</bean>
+	<!-- 全局异常配置 end -->
+
+</beans>
